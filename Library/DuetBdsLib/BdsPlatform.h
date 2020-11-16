@@ -23,6 +23,7 @@ Abstract:
 #define _PLATFORM_SPECIFIC_BDS_PLATFORM_H_
 
 #include <Library/DuetBdsLib.h>
+#include <Library/OcMiscLib.h>
 #include <Library/DevicePathLib.h>
 #include <Protocol/DevicePath.h>
 

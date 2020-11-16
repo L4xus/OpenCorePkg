@@ -50,6 +50,7 @@
   DxeServicesTableLib
   HobLib
   MemoryAllocationLib
+  OcMiscLib
   PcdLib
   PrintLib
   TimerLib
