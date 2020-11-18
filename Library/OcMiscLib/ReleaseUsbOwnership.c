@@ -24,25 +24,34 @@
 #include <Library/UefiBootServicesTableLib.h>
 
 #define XHC_HCCPARAMS_OFFSET      0x10
-#define XHC_NEXT_CAPABILITY_MASK  0xFF00
+#define XHC_NEXT_CAPABILITY_MASK    0xFF00
 #define XHC_CAPABILITY_ID_MASK    0xFF
-#define XHC_USBCMD_OFFSET         0x0    ///< USB Command Register Offset
-#define XHC_USBSTS_OFFSET         0x4    ///< USB Status Register Offset
+#define XHC_USBCMD_OFFSET         0x00    ///< USB Command Register Offset
+#define XHC_USBSTS_OFFSET         0x04    ///< USB Status Register Offset
 #define XHC_POLL_DELAY            1000
 
-#define EHC_BAR_INDEX             0x0
-#define EHC_HCCPARAMS_OFFSET      0x8
-#define EHC_USBCMD_OFFSET         0x0    ///< USB Command Register Offset
-#define EHC_USBSTS_OFFSET         0x4    ///< USB Status Register Offset
-#define EHC_USBINT_OFFSET         0x8    ///< USB Interrupt Enable Register
+#define EHC_BAR_INDEX             0x00
+#define EHC_HCCPARAMS_OFFSET      0x08
+#define EHC_USBCMD_OFFSET         0x00    ///< USB Command Register Offset
+#define EHC_USBSTS_OFFSET         0x04    ///< USB Status Register Offset
+#define EHC_USBINT_OFFSET         0x08    ///< USB Interrupt Enable Register
+
+#define UHC_BAR_INDEX             0x00
+#define UHC_CMD_REGISTER          0x00
+#define   UHCCMD_HCRESET          0x0002
+#define UHC_INT_REGISTER          0x04
+#define UHC_LEGACY_REGISTER       0xC0
+
+#define CONTROLLED_BY_BIOS        BIT16
+#define CONTROLLED_BY_OS          BIT24
 
 /**
-  Release XHCI USB controllers ownership.
+  Disable USB Legacy Emulation on XHCI USB controller
 
-  @param[in]  PciIo  PCI I/O protocol for the device.
+  @param[in]  PciIo  PCI I/O protocol for the device
 
-  @retval EFI_NOT_FOUND  No XHCI controllers had ownership incorrectly set.
-  @retval EFI_SUCCESS    Corrected XHCI controllers ownership to OS.
+  @retval EFI_NOT_FOUND  Legacy Emulation is in undefined state
+  @retval EFI_SUCCESS    Legacy Emulation is disabled
 **/
 STATIC
 EFI_STATUS
@@ -58,7 +67,7 @@ XhciReleaseOwnership (
   INT32   TimeOut;
 
   //
-  // XHCI controller, then disable legacy support, if enabled.
+  // Start search for USB Legacy Support Capability Register
   //
 
   Status = PciIo->Mem.Read (
@@ -70,7 +79,7 @@ XhciReleaseOwnership (
     &HcCapParams
     );
 
-  ExtendCap = EFI_ERROR (Status) ? 0 : ((HcCapParams >> 14U) & 0x3FFFCU);
+  ExtendCap = EFI_ERROR (Status) ? 0 : ((HcCapParams >> 14U) & 0x03FFFCU);
 
   while (ExtendCap) {
     Status = PciIo->Mem.Read (
@@ -87,14 +96,15 @@ XhciReleaseOwnership (
     }
 
     if ((Value & XHC_CAPABILITY_ID_MASK) == 1) {
+      // USBLEGSUP register found
+      // Check current state
+      // Do nothing if there is no legacy emulation on device
       //
-      // Do nothing if BIOS ownership is cleared.
-      //
-      if (!(Value & BIT16)) {
+      if (!(Value & CONTROLLED_BY_BIOS)) {
         break;
       }
 
-      Value |= BIT24;
+      Value |= CONTROLLED_BY_OS;
 
       PciIo->Mem.Write (
         PciIo,
@@ -118,13 +128,13 @@ XhciReleaseOwnership (
           &Value
           );
 
-        if (EFI_ERROR(Status) || !(Value & BIT16)) {
+        if (EFI_ERROR(Status) || !(Value & CONTROLLED_BY_BIOS)) {
           break;
         }
       }
 
       //
-      // Disable all SMI in USBLEGCTLSTS
+      // Dismiss all interrupts in USBLEGCTLSTS
       //
       Status = PciIo->Mem.Read (
         PciIo,
@@ -139,7 +149,7 @@ XhciReleaseOwnership (
         break;
       }
 
-      Value &= 0x1F1FEEU;
+      Value &= 0x001F1FEEU;
       Value |= 0xE0000000U;
 
       PciIo->Mem.Write (
@@ -152,7 +162,7 @@ XhciReleaseOwnership (
         );
 
       //
-      // Clear all ownership
+      // XXX: Clear all ownership
       //
       Status = PciIo->Mem.Read (
         PciIo,
@@ -167,7 +177,7 @@ XhciReleaseOwnership (
         break;
       }
 
-      Value &= ~(BIT24 | BIT16);
+      Value &= ~(CONTROLLED_BY_BIOS | CONTROLLED_BY_OS);
       PciIo->Mem.Write (
         PciIo,
         EfiPciIoWidthUint32,
@@ -184,19 +194,19 @@ XhciReleaseOwnership (
       break;
     }
 
-    ExtendCap += ((Value >> 6U) & 0x3FCU);
+    ExtendCap += ((Value >> 6U) & 0x03FCU);
   }
 
   return Status;
 }
 
 /**
- Release EHCI USB controllers ownership.
+  Disable USB Legacy Emulation on EHCI USB controller
 
- @param[in]  PciIo  PCI I/O protocol for the device.
+  @param[in]  PciIo  PCI I/O protocol for the device
 
- @retval EFI_NOT_FOUND  No EHCI controllers had ownership incorrectly set.
- @retval EFI_SUCCESS    Corrected EHCI controllers ownership to OS.
+  @retval EFI_NOT_FOUND  Legacy Emulation is in undefined state
+  @retval EFI_SUCCESS    Legacy Emulation is disabled
  **/
 STATIC
 EFI_STATUS
@@ -217,6 +227,8 @@ EhciReleaseOwnership (
   BOOLEAN          IsOwnershipConflict;
   UINT32           HcCapParams;
   INT32            TimeOut;
+
+  // Hit hardware with sledgehammer
 
   Value = 0x0002;
 
@@ -240,7 +252,7 @@ EhciReleaseOwnership (
 
   if (MmioRead8 (Base) < 0x0C) {
     //
-    // Config space too small: no legacy implementation.
+    // Config space too small: no legacy support.
     //
     return EFI_NOT_FOUND;
   }
@@ -272,12 +284,12 @@ EhciReleaseOwnership (
     &UsbLegSup
     );
 
-  IsBiosOwned = (UsbLegSup & BIT16) != 0;
+  IsBiosOwned = (UsbLegSup & CONTROLLED_BY_BIOS) != 0;
   if (!IsBiosOwned) {
     //
-    // No BIOS ownership, ignore.
+    // No legacy emulation on device
     //
-    return EFI_NOT_FOUND;
+    return EFI_NOT_FOUND; // XXX
   }
 
   //
@@ -306,7 +318,7 @@ EhciReleaseOwnership (
   UsbCmd  = MmioRead32 (OpAddr + EHC_USBCMD_OFFSET);
 
   //
-  // Clear registers to default.
+  // Set registers to default.
   //
   UsbCmd = UsbCmd & 0xFFFFFF00U;
   MmioWrite32 (OpAddr + EHC_USBCMD_OFFSET, UsbCmd);
@@ -333,8 +345,8 @@ EhciReleaseOwnership (
     &UsbLegSup
     );
 
-  IsBiosOwned = (UsbLegSup & BIT16) != 0;
-  IsOsOwned   = (UsbLegSup & BIT24) != 0;
+  IsBiosOwned = (UsbLegSup & CONTROLLED_BY_BIOS) != 0;
+  IsOsOwned   = (UsbLegSup & CONTROLLED_BY_OS) != 0;
 
   //
   // Read 32bit USBLEGCTLSTS (eecp+4).
@@ -348,7 +360,7 @@ EhciReleaseOwnership (
     );
 
   //
-  // Get EHCI Ownership from legacy bios.
+  // Get current emulation state
   //
   PciIo->Pci.Read (
     PciIo,
@@ -362,7 +374,7 @@ EhciReleaseOwnership (
 
   if (IsOwnershipConflict) {
     //
-    // EHCI - Ownership conflict - attempting soft reset.
+    // Device control conflict - attempting soft reset.
     //
     Value = 0;
     PciIo->Pci.Write (
@@ -385,7 +397,7 @@ EhciReleaseOwnership (
         &Value
         );
 
-      if ((Value & BIT24) == 0x0) {
+      if ((Value & CONTROLLED_BY_OS) == 0) {
         break;
       }
     }
@@ -399,7 +411,7 @@ EhciReleaseOwnership (
     &Value
     );
 
-  Value |= BIT24;
+  Value |= CONTROLLED_BY_OS;
   PciIo->Pci.Write (
     PciIo,
     EfiPciIoWidthUint32,
@@ -420,12 +432,12 @@ EhciReleaseOwnership (
       &Value
       );
 
-    if ((Value & BIT16) == 0x0) {
+    if ((Value & CONTROLLED_BY_BIOS) == 0x0) {
       break;
     }
   }
 
-  IsOwnershipConflict = (Value & BIT16) != 0x0;
+  IsOwnershipConflict = (Value & CONTROLLED_BY_BIOS) != 0x0;
   if (IsOwnershipConflict) {
     //
     // Soft reset has failed. Assume SMI being ignored and do hard reset.
@@ -451,7 +463,7 @@ EhciReleaseOwnership (
         &Value
         );
 
-      if ((Value & BIT16) == 0x0) {
+      if ((Value & CONTROLLED_BY_BIOS) == 0x0) {
         break;
       }
     }
@@ -477,9 +489,9 @@ EhciReleaseOwnership (
       );
   }
 
-  if (Value & BIT16) {
+  if (Value & CONTROLLED_BY_BIOS) {
     //
-    // EHCI controller unable to take control from BIOS.
+    // BIOS engine did not give up!
     //
     Status = EFI_NOT_FOUND;
   }
@@ -488,13 +500,14 @@ EhciReleaseOwnership (
 }
 
 /**
- Release UHCI USB controllers ownership.
+  Disable USB Legacy Emulation on XHCI USB controller
 
- @param[in]  PciIo  PCI I/O protocol for the device.
+  @param[in]  PciIo  PCI I/O protocol for the device
 
- @retval EFI_NOT_FOUND  No UHCI controllers had ownership incorrectly set.
- @retval EFI_SUCCESS    Corrected UHCI controllers ownership to OS.
+  @retval EFI_NOT_FOUND  Legacy Emulation is in undefined state
+  @retval EFI_SUCCESS    Legacy Emulation is disabled
  **/
+
 STATIC
 EFI_STATUS
 UhciReleaseOwnership (
@@ -508,7 +521,7 @@ UhciReleaseOwnership (
 
   Base = 0;
 
-  Status = PciIo->Pci.Read(
+  Status = PciIo->Pci.Read (
     PciIo,
     EfiPciIoWidthUint32,
     0x20,
@@ -518,20 +531,20 @@ UhciReleaseOwnership (
 
   PortBase = (Base >> 5) & 0x07ff;
 
-  Command = 0x8f00;
+  Command = 0x8F00;
 
   Status = PciIo->Pci.Write (
     PciIo,
     EfiPciIoWidthUint16,
-    0xC0,
+    UHC_LEGACY_REGISTER,
     1,
     &Command
     );
 
   if (PortBase != 0 && (PortBase & BIT0) == 0) {
-    IoWrite16 (PortBase, 0x0002);
+    IoWrite16 (PortBase, UHCCMD_HCRESET);
     gBS->Stall (500);
-    IoWrite16 (PortBase + 4, 0);
+    IoWrite16 (PortBase + UHC_INT_REGISTER, 0);
     gBS->Stall (500);
     IoWrite16 (PortBase, 0);
   }
@@ -585,18 +598,22 @@ ReleaseUsbOwnership (
       &Pci
       );
 
-    if (EFI_ERROR (Status)
-      || Pci.Hdr.ClassCode[1] != PCI_CLASS_SERIAL_USB
-      || Pci.Hdr.ClassCode[2] != PCI_CLASS_SERIAL) {
+    if (EFI_ERROR (Status) || !IS_PCI_USB (&Pci)) {
       continue;
     }
 
-    if (Pci.Hdr.ClassCode[0] == PCI_IF_XHCI) {
-      Result = XhciReleaseOwnership (PciIo);
-    } else if (Pci.Hdr.ClassCode[0] == PCI_IF_EHCI) {
+    switch (Pci.Hdr.ClassCode[0]) {
+    case PCI_IF_EHCI:
       Result = EhciReleaseOwnership (PciIo);
-    } else if (Pci.Hdr.ClassCode[0] == PCI_IF_UHCI) {
+      break;
+    case PCI_IF_UHCI:
       Result = UhciReleaseOwnership (PciIo);
+      break;
+    case PCI_IF_XHCI:
+      Result = XhciReleaseOwnership (PciIo);
+      break;
+    default:
+      break;
     }
   }
 
