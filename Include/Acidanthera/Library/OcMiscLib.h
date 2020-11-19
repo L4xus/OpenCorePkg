@@ -97,7 +97,7 @@ OcHandleProtocolFallback (
 /**
   Turn off legacy devices emulation for USB devices
 **/
-EFI_STATUS
+VOID
 TurnOffUsbEmulation (
   VOID
   );

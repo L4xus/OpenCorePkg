@@ -268,10 +268,7 @@ OcExitBootServicesHandler (
   //
 
   if (Config->Uefi.Quirks.TurnOffUsbEmulation) {
-    Status = TurnOffUsbEmulation ();
-    if (EFI_ERROR (Status)) {
-      DEBUG ((DEBUG_INFO, "OC: TurnOffUsbEmulation - %r\n", Status));
-    }
+    TurnOffUsbEmulation ();
   }
 
   //

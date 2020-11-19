@@ -945,8 +945,7 @@ Returns:
   // Caution: Must ensure the PCI bus driver has been started. Since the
   // ConnectRootBridge() will create all the PciIo protocol, it's safe here now
   //
-  // XXX: Blindly assume success
-  (VOID) TurnOffUsbEmulation ();
+  TurnOffUsbEmulation ();
 
   //
   // Connect the all the default console with current console variable

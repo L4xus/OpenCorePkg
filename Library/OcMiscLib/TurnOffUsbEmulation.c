@@ -49,12 +49,9 @@
   Disable USB Legacy Emulation on XHCI USB controller
 
   @param[in]  PciIo  PCI I/O protocol for the device
-
-  @retval EFI_NOT_FOUND  Legacy Emulation is in undefined state
-  @retval EFI_SUCCESS    Legacy Emulation is disabled
 **/
 STATIC
-EFI_STATUS
+VOID
 XhciTurnOffUsbEmulation (
   IN  EFI_PCI_IO_PROTOCOL   *PciIo
   )
@@ -196,20 +193,15 @@ XhciTurnOffUsbEmulation (
 
     ExtendCap += ((Value >> 6U) & 0x03FCU);
   }
-
-  return Status;
 }
 
 /**
   Disable USB Legacy Emulation on EHCI USB controller
 
   @param[in]  PciIo  PCI I/O protocol for the device
-
-  @retval EFI_NOT_FOUND  Legacy Emulation is in undefined state
-  @retval EFI_SUCCESS    Legacy Emulation is disabled
  **/
 STATIC
-EFI_STATUS
+VOID
 EhciTurnOffUsbEmulation (
   IN  EFI_PCI_IO_PROTOCOL   *PciIo
   )
@@ -254,7 +246,7 @@ EhciTurnOffUsbEmulation (
     //
     // Config space too small: no legacy support.
     //
-    return EFI_NOT_FOUND;
+    return;
   }
 
   //
@@ -289,7 +281,7 @@ EhciTurnOffUsbEmulation (
     //
     // No legacy emulation on device
     //
-    return EFI_NOT_FOUND; // XXX
+    return;
   }
 
   //
@@ -488,28 +480,16 @@ EhciTurnOffUsbEmulation (
       &UsbLegCtlSts
       );
   }
-
-  if (Value & CONTROLLED_BY_BIOS) {
-    //
-    // BIOS engine did not give up!
-    //
-    Status = EFI_NOT_FOUND;
-  }
-
-  return Status;
 }
 
 /**
-  Disable USB Legacy Emulation on XHCI USB controller
+  Disable USB Legacy Emulation on UHCI USB controller
 
   @param[in]  PciIo  PCI I/O protocol for the device
-
-  @retval EFI_NOT_FOUND  Legacy Emulation is in undefined state
-  @retval EFI_SUCCESS    Legacy Emulation is disabled
  **/
 
 STATIC
-EFI_STATUS
+VOID
 UhciTurnOffUsbEmulation (
   IN  EFI_PCI_IO_PROTOCOL   *PciIo
   )
@@ -548,16 +528,13 @@ UhciTurnOffUsbEmulation (
     gBS->Stall (500);
     IoWrite16 (PortBase, 0);
   }
-
-  return Status;
 }
 
-EFI_STATUS
+VOID
 TurnOffUsbEmulation (
   VOID
   )
 {
-  EFI_STATUS            Result;
   EFI_STATUS            Status;
   EFI_HANDLE            *HandleArray;
   UINTN                 HandleArrayCount;
@@ -574,10 +551,8 @@ TurnOffUsbEmulation (
                     );
 
   if (EFI_ERROR (Status)) {
-    return Status;
+    return;
   }
-
-  Result = EFI_UNSUPPORTED;
 
   for (Index = 0; Index < HandleArrayCount; ++Index) {
     Status = gBS->HandleProtocol (
@@ -604,13 +579,13 @@ TurnOffUsbEmulation (
 
     switch (Pci.Hdr.ClassCode[0]) {
     case PCI_IF_EHCI:
-      Result = EhciTurnOffUsbEmulation (PciIo);
+      EhciTurnOffUsbEmulation (PciIo);
       break;
     case PCI_IF_UHCI:
-      Result = UhciTurnOffUsbEmulation (PciIo);
+      UhciTurnOffUsbEmulation (PciIo);
       break;
     case PCI_IF_XHCI:
-      Result = XhciTurnOffUsbEmulation (PciIo);
+      XhciTurnOffUsbEmulation (PciIo);
       break;
     default:
       break;
@@ -618,5 +593,4 @@ TurnOffUsbEmulation (
   }
 
   gBS->FreePool (HandleArray);
-  return Result;
 }
