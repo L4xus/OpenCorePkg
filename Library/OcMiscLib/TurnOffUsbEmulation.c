@@ -36,10 +36,6 @@
 #define EHC_USBSTS_OFFSET         0x04    ///< USB Status Register Offset
 #define EHC_USBINT_OFFSET         0x08    ///< USB Interrupt Enable Register
 
-#define UHC_BAR_INDEX             0x00
-#define UHC_CMD_REGISTER          0x00
-#define   UHCCMD_HCRESET          0x0002
-#define UHC_INT_REGISTER          0x04
 #define UHC_LEGACY_REGISTER       0xC0
 
 #define CONTROLLED_BY_BIOS        BIT16
