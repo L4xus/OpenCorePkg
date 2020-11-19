@@ -494,40 +494,17 @@ UhciTurnOffUsbEmulation (
   IN  EFI_PCI_IO_PROTOCOL   *PciIo
   )
 {
-  EFI_STATUS  Status;
-  UINT32      Base;
-  UINT32      PortBase;
   UINT16      Command;
 
-  Base = 0;
+  Command = 0;
 
-  Status = PciIo->Pci.Read (
-    PciIo,
-    EfiPciIoWidthUint32,
-    0x20,
-    1,
-    &Base
-    );
-
-  PortBase = (Base >> 5) & 0x07ff;
-
-  Command = 0x8F00;
-
-  Status = PciIo->Pci.Write (
+  (VOID) PciIo->Pci.Write (
     PciIo,
     EfiPciIoWidthUint16,
     UHC_LEGACY_REGISTER,
     1,
     &Command
     );
-
-  if (PortBase != 0 && (PortBase & BIT0) == 0) {
-    IoWrite16 (PortBase, UHCCMD_HCRESET);
-    gBS->Stall (500);
-    IoWrite16 (PortBase + UHC_INT_REGISTER, 0);
-    gBS->Stall (500);
-    IoWrite16 (PortBase, 0);
-  }
 }
 
 VOID
