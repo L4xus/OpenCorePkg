@@ -30,9 +30,6 @@
 
 #define EHC_BAR_INDEX             0x00
 #define EHC_HCCPARAMS_OFFSET      0x08
-#define EHC_USBCMD_OFFSET         0x00    ///< USB Command Register Offset
-#define EHC_USBSTS_OFFSET         0x04    ///< USB Status Register Offset
-#define EHC_USBINT_OFFSET         0x08    ///< USB Interrupt Enable Register
 
 #define UHC_LEGACY_REGISTER       0xC0
 
@@ -96,7 +93,7 @@ XhciTurnOffUsbEmulation (
       // Do nothing if there is no legacy emulation on device
       //
       if (!(Value & CONTROLLED_BY_BIOS)) {
-        return;
+        break;
       }
 
       Value &= ~CONTROLLED_BY_BIOS;
@@ -127,52 +124,9 @@ EhciTurnOffUsbEmulation (
   )
 {
   EFI_STATUS       Status;
-  UINT32           Value;
-  UINT32           Base;
-  UINT32           OpAddr;
-  UINT32           ExtendCap;
-  UINT32           UsbCmd;
+  UINT32           ExtendCapOffset;
   UINT32           UsbLegSup;
-  UINT32           UsbLegCtlSts;
-  UINTN            IsOsOwned;
-  UINTN            IsBiosOwned;
-  BOOLEAN          IsOwnershipConflict;
   UINT32           HcCapParams;
-  INT32            TimeOut;
-
-  // Hit hardware with sledgehammer
-
-  Value = 0x0002;
-
-  PciIo->Pci.Write (
-    PciIo,
-    EfiPciIoWidthUint16,
-    0x04,
-    1,
-    &Value
-    );
-
-  Base = 0;
-
-  Status = PciIo->Pci.Read (
-    PciIo,
-    EfiPciIoWidthUint32,
-    0x10,
-    1,
-    &Base
-    );
-
-  if (MmioRead8 (Base) < 0x0C) {
-    //
-    // Config space too small: no legacy support.
-    //
-    return;
-  }
-
-  //
-  // Operational Registers = capaddr + offset (8bit CAPLENGTH in Capability Registers + offset 0).
-  //
-  OpAddr = Base + MmioRead8 (Base);
 
   Status = PciIo->Mem.Read (
     PciIo,
@@ -183,223 +137,35 @@ EhciTurnOffUsbEmulation (
     &HcCapParams
     );
 
-  ExtendCap = (HcCapParams >> 8U) & 0xFFU;
-
-  //
-  // Read PCI Config 32bit USBLEGSUP (eecp+0).
-  //
-  Status = PciIo->Pci.Read (
-    PciIo,
-    EfiPciIoWidthUint32,
-    ExtendCap,
-    1,
-    &UsbLegSup
-    );
-
-  IsBiosOwned = (UsbLegSup & CONTROLLED_BY_BIOS) != 0;
-  if (!IsBiosOwned) {
-    //
-    // No legacy emulation on device
-    //
+  if (EFI_ERROR (Status)) {
     return;
   }
 
-  //
-  // Read PCI Config 32bit USBLEGCTLSTS (eecp+4).
-  //
-  PciIo->Pci.Read (
+  ExtendCapOffset = (HcCapParams >> 8U) & 0xFFU;
+
+  Status = PciIo->Pci.Read (
     PciIo,
     EfiPciIoWidthUint32,
-    ExtendCap + 0x4,
-    1,
-    &UsbLegCtlSts
-    );
-
-  //
-  // Disable the SMI in USBLEGCTLSTS firstly.
-  //
-  UsbLegCtlSts &= 0xFFFF0000U;
-  PciIo->Pci.Write (
-    PciIo,
-    EfiPciIoWidthUint32,
-    ExtendCap + 0x4,
-    1,
-    &UsbLegCtlSts
-    );
-
-  UsbCmd  = MmioRead32 (OpAddr + EHC_USBCMD_OFFSET);
-
-  //
-  // Set registers to default.
-  //
-  UsbCmd = UsbCmd & 0xFFFFFF00U;
-  MmioWrite32 (OpAddr + EHC_USBCMD_OFFSET, UsbCmd);
-  MmioWrite32 (OpAddr + EHC_USBINT_OFFSET, 0);
-  MmioWrite32 (OpAddr + EHC_USBSTS_OFFSET, 0x1000);
-
-  Value = 1;
-  PciIo->Pci.Write (
-    PciIo,
-    EfiPciIoWidthUint32,
-    ExtendCap,
-    1,
-    &Value
-    );
-
-  //
-  // Read 32bit USBLEGSUP (eecp+0).
-  //
-  PciIo->Pci.Read (
-    PciIo,
-    EfiPciIoWidthUint32,
-    ExtendCap,
+    ExtendCapOffset,
     1,
     &UsbLegSup
     );
 
-  IsBiosOwned = (UsbLegSup & CONTROLLED_BY_BIOS) != 0;
-  IsOsOwned   = (UsbLegSup & CONTROLLED_BY_OS) != 0;
+  if (EFI_ERROR (Status) || !(UsbLegSup & CONTROLLED_BY_BIOS)) {
+    return;
+  }
 
-  //
-  // Read 32bit USBLEGCTLSTS (eecp+4).
-  //
-  PciIo->Pci.Read (
+  UsbLegSup &= ~CONTROLLED_BY_BIOS;
+  UsbLegSup |= CONTROLLED_BY_OS;
+
+  (VOID) PciIo->Mem.Write (
     PciIo,
     EfiPciIoWidthUint32,
-    ExtendCap + 0x4,
-    1,
-    &UsbLegCtlSts
-    );
-
-  //
-  // Get current emulation state
-  //
-  PciIo->Pci.Read (
-    PciIo,
-    EfiPciIoWidthUint32,
-    ExtendCap,
+    XHC_USBCMD_OFFSET,
+    ExtendCapOffset,
     1,
     &UsbLegSup
     );
-
-  IsOwnershipConflict = IsBiosOwned && IsOsOwned;
-
-  if (IsOwnershipConflict) {
-    //
-    // Device control conflict - attempting soft reset.
-    //
-    Value = 0;
-    PciIo->Pci.Write (
-      PciIo,
-      EfiPciIoWidthUint8,
-      ExtendCap + 3,
-      1,
-      &Value
-      );
-
-    TimeOut = 40;
-    while (TimeOut--) {
-      gBS->Stall (500);
-
-      PciIo->Pci.Read (
-        PciIo,
-        EfiPciIoWidthUint32,
-        ExtendCap,
-        1,
-        &Value
-        );
-
-      if ((Value & CONTROLLED_BY_OS) == 0) {
-        break;
-      }
-    }
-  }
-
-  PciIo->Pci.Read (
-    PciIo,
-    EfiPciIoWidthUint32,
-    ExtendCap,
-    1,
-    &Value
-    );
-
-  Value |= CONTROLLED_BY_OS;
-  PciIo->Pci.Write (
-    PciIo,
-    EfiPciIoWidthUint32,
-    ExtendCap,
-    1,
-    &Value
-    );
-
-  TimeOut = 40;
-  while (TimeOut--) {
-    gBS->Stall (500);
-
-    PciIo->Pci.Read (
-      PciIo,
-      EfiPciIoWidthUint32,
-      ExtendCap,
-      1,
-      &Value
-      );
-
-    if ((Value & CONTROLLED_BY_BIOS) == 0x0) {
-      break;
-    }
-  }
-
-  IsOwnershipConflict = (Value & CONTROLLED_BY_BIOS) != 0x0;
-  if (IsOwnershipConflict) {
-    //
-    // Soft reset has failed. Assume SMI being ignored and do hard reset.
-    //
-    Value = 0;
-    PciIo->Pci.Write (
-      PciIo,
-      EfiPciIoWidthUint8,
-      ExtendCap + 2,
-      1,
-      &Value
-      );
-
-    TimeOut = 40;
-    while (TimeOut--) {
-      gBS->Stall (500);
-
-      PciIo->Pci.Read (
-        PciIo,
-        EfiPciIoWidthUint32,
-        ExtendCap,
-        1,
-        &Value
-        );
-
-      if ((Value & CONTROLLED_BY_BIOS) == 0x0) {
-        break;
-      }
-    }
-
-    //
-    // Disable further SMI events.
-    //
-    PciIo->Pci.Read (
-      PciIo,
-      EfiPciIoWidthUint32,
-      ExtendCap + 0x4,
-      1,
-      &UsbLegCtlSts
-      );
-
-    UsbLegCtlSts &= 0xFFFF0000U;
-    PciIo->Pci.Write (
-      PciIo,
-      EfiPciIoWidthUint32,
-      ExtendCap + 0x4,
-      1,
-      &UsbLegCtlSts
-      );
-  }
 }
 
 /**
