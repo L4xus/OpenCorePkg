@@ -628,7 +628,7 @@ typedef enum {
   _(UINT32                      , TscSyncTimeout              ,     , 0      , ()) \
   _(BOOLEAN                     , DeduplicateBootOrder        ,     , FALSE  , ()) \
   _(BOOLEAN                     , IgnoreInvalidFlexRatio      ,     , FALSE  , ()) \
-  _(BOOLEAN                     , ReleaseUsbOwnership         ,     , FALSE  , ()) \
+  _(BOOLEAN                     , TurnOffUsbEmulation         ,     , FALSE  , ()) \
   _(BOOLEAN                     , RequestBootVarRouting       ,     , FALSE  , ()) \
   _(BOOLEAN                     , UnblockFsConnect            ,     , FALSE  , ())
   OC_DECLARE (OC_UEFI_QUIRKS)

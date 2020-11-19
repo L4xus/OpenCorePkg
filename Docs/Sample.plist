@@ -1130,7 +1130,7 @@
 			<integer>0</integer>
 			<key>IgnoreInvalidFlexRatio</key>
 			<false/>
-			<key>ReleaseUsbOwnership</key>
+			<key>TurnOffUsbEmulation</key>
 			<false/>
 			<key>RequestBootVarRouting</key>
 			<true/>

@@ -55,7 +55,7 @@
 **/
 STATIC
 EFI_STATUS
-XhciReleaseOwnership (
+XhciTurnOffUsbEmulation (
   IN  EFI_PCI_IO_PROTOCOL   *PciIo
   )
 {
@@ -210,7 +210,7 @@ XhciReleaseOwnership (
  **/
 STATIC
 EFI_STATUS
-EhciReleaseOwnership (
+EhciTurnOffUsbEmulation (
   IN  EFI_PCI_IO_PROTOCOL   *PciIo
   )
 {
@@ -510,7 +510,7 @@ EhciReleaseOwnership (
 
 STATIC
 EFI_STATUS
-UhciReleaseOwnership (
+UhciTurnOffUsbEmulation (
   IN  EFI_PCI_IO_PROTOCOL   *PciIo
   )
 {
@@ -553,7 +553,7 @@ UhciReleaseOwnership (
 }
 
 EFI_STATUS
-ReleaseUsbOwnership (
+TurnOffUsbEmulation (
   VOID
   )
 {
@@ -604,13 +604,13 @@ ReleaseUsbOwnership (
 
     switch (Pci.Hdr.ClassCode[0]) {
     case PCI_IF_EHCI:
-      Result = EhciReleaseOwnership (PciIo);
+      Result = EhciTurnOffUsbEmulation (PciIo);
       break;
     case PCI_IF_UHCI:
-      Result = UhciReleaseOwnership (PciIo);
+      Result = UhciTurnOffUsbEmulation (PciIo);
       break;
     case PCI_IF_XHCI:
-      Result = XhciReleaseOwnership (PciIo);
+      Result = XhciTurnOffUsbEmulation (PciIo);
       break;
     default:
       break;

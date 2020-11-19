@@ -6418,11 +6418,11 @@ functioning. Feature highlights:
   its use is only recommended when it is specifically required.
 
 \item
-  \texttt{ReleaseUsbOwnership}\\
+  \texttt{TurnOffUsbEmulation}\\
   \textbf{Type}: \texttt{plist\ boolean}\\
   \textbf{Failsafe}: \texttt{false}\\
-  \textbf{Description}: Attempt to detach USB controller ownership from
-  the firmware driver. While most types of firmware manage to do that properly,
+  \textbf{Description}: Attempt to disable legacy devices emulation like PS2, ... for USB devices.
+  While most types of firmware manage to do that properly,
   or at least have an option for this, some do not. As a result,
   the operating system may freeze upon boot. Not recommended unless required.
 

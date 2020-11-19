@@ -47,6 +47,6 @@
 [Sources]
   DataPatcher.c
   DirectReset.c
-  ReleaseUsbOwnership.c
+  TurnOffUsbEmulation.c
   ProtocolSupport.c
   Math.c

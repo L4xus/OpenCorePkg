@@ -267,10 +267,10 @@ OcExitBootServicesHandler (
   // Only do that on error, which is not expected.
   //
 
-  if (Config->Uefi.Quirks.ReleaseUsbOwnership) {
-    Status = ReleaseUsbOwnership ();
+  if (Config->Uefi.Quirks.TurnOffUsbEmulation) {
+    Status = TurnOffUsbEmulation ();
     if (EFI_ERROR (Status)) {
-      DEBUG ((DEBUG_INFO, "OC: ReleaseUsbOwnership - %r\n", Status));
+      DEBUG ((DEBUG_INFO, "OC: TurnOffUsbEmulation - %r\n", Status));
     }
   }
 

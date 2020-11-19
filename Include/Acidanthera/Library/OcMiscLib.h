@@ -95,10 +95,10 @@ OcHandleProtocolFallback (
   );
 
 /**
-  Release UEFI ownership from USB controllers at booting.
+  Turn off legacy devices emulation for USB devices
 **/
 EFI_STATUS
-ReleaseUsbOwnership (
+TurnOffUsbEmulation (
   VOID
   );
 
