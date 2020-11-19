@@ -24,11 +24,9 @@
 #include <Library/UefiBootServicesTableLib.h>
 
 #define XHC_HCCPARAMS_OFFSET      0x10
-#define XHC_NEXT_CAPABILITY_MASK    0xFF00
-#define XHC_CAPABILITY_ID_MASK    0xFF
 #define XHC_USBCMD_OFFSET         0x00    ///< USB Command Register Offset
-#define XHC_USBSTS_OFFSET         0x04    ///< USB Status Register Offset
-#define XHC_POLL_DELAY            1000
+#define XHC_NEXT_CAPABILITY_MASK  0xFF00
+#define XHC_CAPABILITY_ID_MASK    0xFF
 
 #define EHC_BAR_INDEX             0x00
 #define EHC_HCCPARAMS_OFFSET      0x08
@@ -113,7 +111,7 @@ XhciTurnOffUsbEmulation (
         &Value
         );
     }
-    ExtendCapOffset += ((Value & XHC_CAPABILITY_ID_MASK) >> 8) << 2; // spec table 7-1
+    ExtendCapOffset += ((Value & XHC_NEXT_CAPABILITY_MASK) >> 8) << 2; // spec table 7-1
   }
 }
 
