@@ -55,9 +55,8 @@ XhciTurnOffUsbEmulation (
   EFI_STATUS  Status;
 
   UINT32  HcCapParams;
-  UINT32  ExtendCap;
+  UINT32  ExtendCapOffset;
   UINT32  Value;
-  INT32   TimeOut;
 
   //
   // Start search for USB Legacy Support Capability Register
@@ -72,14 +71,18 @@ XhciTurnOffUsbEmulation (
     &HcCapParams
     );
 
-  ExtendCap = EFI_ERROR (Status) ? 0 : ((HcCapParams >> 14U) & 0x03FFFCU);
+  if (EFI_ERROR (Status)) {
+    return;
+  }
 
-  while (ExtendCap) {
+  ExtendCapOffset = EFI_ERROR (Status) ? 0 : ((HcCapParams >> 16) << 2); // spec table 7-1
+
+  while (ExtendCapOffset) {
     Status = PciIo->Mem.Read (
       PciIo,
       EfiPciIoWidthUint32,
       XHC_USBCMD_OFFSET,
-      ExtendCap,
+      ExtendCapOffset,
       1,
       &Value
       );
@@ -89,105 +92,28 @@ XhciTurnOffUsbEmulation (
     }
 
     if ((Value & XHC_CAPABILITY_ID_MASK) == 1) {
-      // USBLEGSUP register found
+      //
+      // USBLEGSUP register present
       // Check current state
       // Do nothing if there is no legacy emulation on device
       //
       if (!(Value & CONTROLLED_BY_BIOS)) {
-        break;
+        return;
       }
 
+      Value &= ~CONTROLLED_BY_BIOS;
       Value |= CONTROLLED_BY_OS;
 
-      PciIo->Mem.Write (
+      (VOID) PciIo->Mem.Write (
         PciIo,
         EfiPciIoWidthUint32,
         XHC_USBCMD_OFFSET,
-        ExtendCap,
+        ExtendCapOffset,
         1,
         &Value
         );
-
-      TimeOut = 40;
-      while (TimeOut--) {
-        gBS->Stall (500);
-
-        Status = PciIo->Mem.Read (
-          PciIo,
-          EfiPciIoWidthUint32,
-          XHC_USBCMD_OFFSET,
-          ExtendCap,
-          1,
-          &Value
-          );
-
-        if (EFI_ERROR(Status) || !(Value & CONTROLLED_BY_BIOS)) {
-          break;
-        }
-      }
-
-      //
-      // Dismiss all interrupts in USBLEGCTLSTS
-      //
-      Status = PciIo->Mem.Read (
-        PciIo,
-        EfiPciIoWidthUint32,
-        XHC_USBCMD_OFFSET,
-        ExtendCap + 4,
-        1,
-        &Value
-        );
-
-      if (EFI_ERROR(Status)) {
-        break;
-      }
-
-      Value &= 0x001F1FEEU;
-      Value |= 0xE0000000U;
-
-      PciIo->Mem.Write (
-        PciIo,
-        EfiPciIoWidthUint32,
-        XHC_USBCMD_OFFSET,
-        ExtendCap + 4,
-        1,
-        &Value
-        );
-
-      //
-      // XXX: Clear all ownership
-      //
-      Status = PciIo->Mem.Read (
-        PciIo,
-        EfiPciIoWidthUint32,
-        XHC_USBCMD_OFFSET,
-        ExtendCap,
-        1,
-        &Value
-        );
-
-      if (EFI_ERROR(Status)) {
-        break;
-      }
-
-      Value &= ~(CONTROLLED_BY_BIOS | CONTROLLED_BY_OS);
-      PciIo->Mem.Write (
-        PciIo,
-        EfiPciIoWidthUint32,
-        XHC_USBCMD_OFFSET,
-        ExtendCap,
-        1,
-        &Value
-        );
-
-      break;
     }
-
-    if (!(Value & XHC_NEXT_CAPABILITY_MASK)) {
-      break;
-    }
-
-    ExtendCap += ((Value >> 6U) & 0x03FCU);
+    ExtendCapOffset += ((Value & XHC_CAPABILITY_ID_MASK) >> 8) << 2; // spec table 7-1
   }
 }
 
