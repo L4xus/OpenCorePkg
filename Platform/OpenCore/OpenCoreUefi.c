@@ -256,7 +256,6 @@ OcExitBootServicesHandler (
   IN VOID       *Context
   )
 {
-  EFI_STATUS         Status;
   OC_GLOBAL_CONFIG   *Config;
 
   Config = (OC_GLOBAL_CONFIG *) Context;
